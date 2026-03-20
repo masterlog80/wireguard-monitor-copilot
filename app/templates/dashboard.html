@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – WireGuard Monitor{% endblock %}
+
+{% block content %}
+<!-- ======================== WireGuard Status ======================== -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-hdd-network-fill text-success"></i>
+        <span class="fw-semibold">WireGuard Status</span>
+        <span id="wg-refresh-badge" class="badge bg-secondary ms-auto">Refreshing…</span>
+      </div>
+      <div class="card-body" id="wg-status-body">
+        <div class="text-center py-3 text-muted">
+          <div class="spinner-border spinner-border-sm me-2"></div>Loading…
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== Peer Status ======================== -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-people-fill text-info"></i>
+        <span class="fw-semibold">Peer Status</span>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-dark table-striped table-hover mb-0" id="peers-table">
+            <thead class="table-secondary">
+              <tr>
+                <th>Interface</th>
+                <th>Public Key</th>
+                <th>Endpoint</th>
+                <th>Allowed IPs</th>
+                <th>Last Handshake</th>
+                <th>Status</th>
+                <th>RX</th>
+                <th>TX</th>
+              </tr>
+            </thead>
+            <tbody id="peers-tbody">
+              <tr>
+                <td colspan="8" class="text-center py-3 text-muted">
+                  <div class="spinner-border spinner-border-sm me-2"></div>Loading…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== Throughput Graphs ======================== -->
+<div class="row g-3 mb-4" id="throughput-section">
+  <div class="col-12">
+    <h5 class="text-muted">
+      <i class="bi bi-graph-up-arrow me-2"></i>Throughput per Peer
+      <small class="fs-6 text-secondary">(refreshes every 5 s)</small>
+    </h5>
+  </div>
+  <div class="col-12" id="throughput-charts-container">
+    <p class="text-muted">Waiting for data…</p>
+  </div>
+</div>
+
+<!-- ======================== Ping Graphs ======================== -->
+<div class="row g-3 mb-4" id="ping-section">
+  <div class="col-12">
+    <h5 class="text-muted">
+      <i class="bi bi-activity me-2"></i>Ping Latency per Peer
+      <small class="fs-6 text-secondary">(refreshes every 5 s)</small>
+    </h5>
+  </div>
+  <div class="col-12" id="ping-charts-container">
+    <p class="text-muted">Waiting for data…</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}
