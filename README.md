@@ -13,6 +13,12 @@ A Flask-based web application running on Linux (port 5000) that provides a real-
 ### Firewall Rules
 ![Firewall Rules](https://github.com/user-attachments/assets/4897b603-e59b-4729-9d83-c1be6b868dc7)
 
+### User Management
+![User Management](https://github.com/user-attachments/assets/78d32ff9-4b4f-45af-ba11-27cb31ad744c)
+
+### Create User
+![Create User](https://github.com/user-attachments/assets/f5e58c7d-dddf-48d5-be78-f41e6ecc18bf)
+
 ## Features
 
 - **WireGuard status** – interface name, public key, listening port
@@ -21,6 +27,7 @@ A Flask-based web application running on Linux (port 5000) that provides a real-
 - **Ping latency graphs** – per-peer round-trip time chart, refreshed every 5 seconds
 - **Firewall rules page** – displays both `iptables` and `nftables` rulesets
 - **User authentication** – login/logout with configurable credentials (via environment variables)
+- **User management** – create, delete, and change passwords for multiple user accounts via the web UI
 
 ## Requirements
 
@@ -65,13 +72,15 @@ Then open **http://\<your-server\>:5000** in a browser and log in.
     ├── __init__.py     # Flask application factory
     ├── auth.py         # Login / logout blueprint
     ├── routes.py       # Dashboard + API blueprints
+    ├── users.py        # User management blueprint
     ├── wireguard.py    # WireGuard data collection & history
     ├── firewall.py     # iptables / nftables reader
     ├── templates/
     │   ├── base.html
     │   ├── login.html
     │   ├── dashboard.html
-    │   └── firewall.html
+    │   ├── firewall.html
+    │   └── users.html
     └── static/
         ├── css/style.css
         ├── js/dashboard.js
