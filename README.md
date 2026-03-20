@@ -2,6 +2,17 @@
 
 A Flask-based web application running on Linux (port 5000) that provides a real-time monitoring UI for WireGuard VPN.
 
+## Screenshots
+
+### Login Page
+![Login Page](https://github.com/user-attachments/assets/116594ca-444b-4550-a636-6807083fd029)
+
+### Dashboard
+![Dashboard](https://github.com/user-attachments/assets/e815662b-3037-4409-a96b-b703f9515efa)
+
+### Firewall Rules
+![Firewall Rules](https://github.com/user-attachments/assets/4897b603-e59b-4729-9d83-c1be6b868dc7)
+
 ## Features
 
 - **WireGuard status** – interface name, public key, listening port
