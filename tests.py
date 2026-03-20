@@ -9,10 +9,21 @@ from unittest.mock import patch, MagicMock
 # Ensure the repo root is importable
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Use a fixed secret key for tests
+# Use a fixed secret key for tests and a temp users file
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "testpass")
+os.environ["USERS_FILE"] = "/tmp/test_users_wireguard.json"
+
+
+def _reset_user_store():
+    """Remove temp users file and reset the module-level singleton."""
+    import app.auth as auth_mod
+    auth_mod._user_store = None
+    try:
+        os.remove("/tmp/test_users_wireguard.json")
+    except FileNotFoundError:
+        pass
 
 
 class TestConfig(unittest.TestCase):
@@ -26,10 +37,15 @@ class TestConfig(unittest.TestCase):
 
 class TestAppFactory(unittest.TestCase):
     def setUp(self):
+        # Remove any leftover temp users file and reset the singleton
+        _reset_user_store()
         from app import create_app
         self.app = create_app()
         self.app.testing = True
         self.client = self.app.test_client()
+
+    def tearDown(self):
+        _reset_user_store()
 
     def test_login_page_loads(self):
         resp = self.client.get("/login")
@@ -206,6 +222,149 @@ Chain OUTPUT (policy ACCEPT 42 packets, 1024 bytes)
 
         self.assertIn("iptables", rules)
         self.assertIn("nftables", rules)
+
+
+class TestUserManagement(unittest.TestCase):
+    """Tests for the user management blueprint and UserStore."""
+
+    def setUp(self):
+        _reset_user_store()
+        from app import create_app
+        self.app = create_app()
+        self.app.testing = True
+        self.client = self.app.test_client()
+        self._login()
+
+    def tearDown(self):
+        _reset_user_store()
+
+    def _login(self):
+        self.client.post(
+            "/login",
+            data={"username": "admin", "password": "testpass"},
+        )
+
+    # ------------------------------------------------------------------
+    # UserStore unit tests
+    # ------------------------------------------------------------------
+
+    def test_user_store_seeds_admin(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        self.assertIn("admin", store.list_users())
+
+    def test_user_store_create_and_get(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        self.assertTrue(store.create_user("alice", "secret123"))
+        user = store.get_user("alice")
+        self.assertIsNotNone(user)
+        self.assertTrue(user.check_password("secret123"))
+
+    def test_user_store_create_duplicate_fails(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        store.create_user("bob", "pass1")
+        self.assertFalse(store.create_user("bob", "pass2"))
+
+    def test_user_store_change_password(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        store.create_user("carol", "oldpass")
+        self.assertTrue(store.change_password("carol", "newpass"))
+        user = store.get_user("carol")
+        self.assertTrue(user.check_password("newpass"))
+        self.assertFalse(user.check_password("oldpass"))
+
+    def test_user_store_delete(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        store.create_user("dave", "pass")
+        self.assertTrue(store.delete_user("dave"))
+        self.assertIsNone(store.get_user("dave"))
+
+    def test_user_store_persists_to_file(self):
+        from app.auth import get_user_store, UserStore
+        store = get_user_store()
+        store.create_user("eve", "pass123")
+        # Load a fresh store from the same file
+        store2 = UserStore("/tmp/test_users_wireguard.json")
+        self.assertIn("eve", store2.list_users())
+
+    # ------------------------------------------------------------------
+    # Route tests
+    # ------------------------------------------------------------------
+
+    def test_users_page_loads(self):
+        resp = self.client.get("/users/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"User Management", resp.data)
+
+    def test_users_page_requires_login(self):
+        self.client.get("/logout")
+        resp = self.client.get("/users/", follow_redirects=False)
+        self.assertIn(resp.status_code, (301, 302))
+        self.assertIn("/login", resp.headers.get("Location", ""))
+
+    def test_create_user_via_route(self):
+        resp = self.client.post(
+            "/users/create",
+            data={"username": "frank", "password": "pw1234", "confirm_password": "pw1234"},
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"frank", resp.data)
+
+    def test_create_user_mismatched_passwords(self):
+        resp = self.client.post(
+            "/users/create",
+            data={"username": "grace", "password": "abc", "confirm_password": "xyz"},
+            follow_redirects=True,
+        )
+        self.assertIn(b"Passwords do not match", resp.data)
+
+    def test_create_duplicate_user(self):
+        self.client.post(
+            "/users/create",
+            data={"username": "heidi", "password": "p", "confirm_password": "p"},
+        )
+        resp = self.client.post(
+            "/users/create",
+            data={"username": "heidi", "password": "p2", "confirm_password": "p2"},
+            follow_redirects=True,
+        )
+        self.assertIn(b"already exists", resp.data)
+
+    def test_change_password_via_route(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        store.create_user("ivan", "oldpw")
+        resp = self.client.post(
+            "/users/ivan/change-password",
+            data={"new_password": "newpw", "confirm_password": "newpw"},
+            follow_redirects=True,
+        )
+        self.assertIn(b"updated successfully", resp.data)
+        user = store.get_user("ivan")
+        self.assertTrue(user.check_password("newpw"))
+
+    def test_delete_user_via_route(self):
+        from app.auth import get_user_store
+        store = get_user_store()
+        store.create_user("judy", "pw")
+        resp = self.client.post(
+            "/users/judy/delete",
+            follow_redirects=True,
+        )
+        self.assertIn(b"deleted", resp.data)
+        self.assertIsNone(store.get_user("judy"))
+
+    def test_cannot_delete_self(self):
+        resp = self.client.post(
+            "/users/admin/delete",
+            follow_redirects=True,
+        )
+        self.assertIn(b"cannot delete your own account", resp.data.lower())
 
 
 if __name__ == "__main__":

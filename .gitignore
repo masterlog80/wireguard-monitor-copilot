@@ -22,3 +22,6 @@ env/
 # Logs / runtime files
 nohup.out
 *.log
+
+# User accounts file (contains hashed passwords – do not commit)
+users.json

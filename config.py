@@ -10,3 +10,5 @@ class Config:
     MAX_HISTORY = int(os.environ.get("MAX_HISTORY", 60))
     # WireGuard interface (leave empty to auto-detect)
     WG_INTERFACE = os.environ.get("WG_INTERFACE", "")
+    # Path to the JSON file used to persist user accounts with hashed passwords
+    USERS_FILE = os.environ.get("USERS_FILE", "users.json")
