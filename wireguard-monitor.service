@@ -1,0 +1,30 @@
+[Unit]
+Description=WireGuard Monitor Web UI
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/wireguard-monitor
+ExecStart=/opt/wireguard-monitor/venv/bin/python run.py
+Restart=on-failure
+RestartSec=5
+
+# Credentials – override via a drop-in or /etc/wireguard-monitor.env
+EnvironmentFile=-/etc/wireguard-monitor.env
+
+# The wg command needs elevated privileges to read interface statistics
+User=root
+
+# Write data files to a stable location
+Environment=USERS_FILE=/var/lib/wireguard-monitor/users.json
+Environment=PEER_NAMES_FILE=/var/lib/wireguard-monitor/peer_names.json
+
+# Harden the service
+ProtectSystem=strict
+ReadOnlyPaths=/opt/wireguard-monitor
+ReadWritePaths=/var/lib/wireguard-monitor
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

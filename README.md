@@ -93,6 +93,80 @@ Then open **http://\<your-server\>:5000** in a browser and log in.
         └── vendor/        # Bootstrap 5, Bootstrap Icons, Chart.js (local)
 ```
 
+## Running as a Service (Auto-start on Boot)
+
+A ready-to-use **systemd** unit file (`wireguard-monitor.service`) is included.
+Follow the steps below to install it so the monitor starts automatically every time the machine boots.
+
+### 1 – Copy the application to a permanent location
+
+```bash
+sudo cp -r . /opt/wireguard-monitor
+```
+
+### 2 – Create the virtual environment on the server
+
+```bash
+cd /opt/wireguard-monitor
+python3 -m venv venv
+venv/bin/pip install --upgrade pip
+venv/bin/pip install -r requirements.txt
+```
+
+### 3 – Create the data directory
+
+The service stores `users.json` and `peer_names.json` under `/var/lib/wireguard-monitor` so they survive updates.
+
+```bash
+sudo mkdir -p /var/lib/wireguard-monitor
+```
+
+### 4 – Set credentials (strongly recommended)
+
+Create the environment file that the service reads at startup:
+
+```bash
+sudo tee /etc/wireguard-monitor.env > /dev/null <<EOF
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=$(python3 -c "import secrets; print(secrets.token_urlsafe(16))")
+SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+EOF
+sudo chmod 600 /etc/wireguard-monitor.env
+```
+
+> **Note:** The commands above generate random credentials automatically.  
+> To use a custom password, replace the `$(python3 …)` part with your chosen value.
+
+### 5 – Install and enable the systemd unit
+
+```bash
+sudo cp /opt/wireguard-monitor/wireguard-monitor.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wireguard-monitor
+```
+
+The `--now` flag starts the service immediately without requiring a reboot.
+
+### 6 – Verify
+
+```bash
+sudo systemctl status wireguard-monitor
+```
+
+You should see `Active: active (running)`.  
+Open **http://\<your-server\>:5000** in a browser to confirm the UI is available.
+
+### Common management commands
+
+| Task | Command |
+|------|---------|
+| Check status | `sudo systemctl status wireguard-monitor` |
+| View live logs | `sudo journalctl -u wireguard-monitor -f` |
+| Stop the service | `sudo systemctl stop wireguard-monitor` |
+| Start the service | `sudo systemctl start wireguard-monitor` |
+| Restart the service | `sudo systemctl restart wireguard-monitor` |
+| Disable auto-start | `sudo systemctl disable wireguard-monitor` |
+
 ## Running Tests
 
 ```bash
