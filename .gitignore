@@ -25,3 +25,5 @@ nohup.out
 
 # User accounts file (contains hashed passwords – do not commit)
 users.json
+# Peer display names file (runtime data – do not commit)
+peer_names.json

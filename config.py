@@ -12,3 +12,5 @@ class Config:
     WG_INTERFACE = os.environ.get("WG_INTERFACE", "")
     # Path to the JSON file used to persist user accounts with hashed passwords
     USERS_FILE = os.environ.get("USERS_FILE", "users.json")
+    # Path to the JSON file used to persist peer display names
+    PEER_NAMES_FILE = os.environ.get("PEER_NAMES_FILE", "peer_names.json")

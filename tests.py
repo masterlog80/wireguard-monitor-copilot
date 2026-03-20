@@ -14,6 +14,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("ADMIN_USERNAME", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "testpass")
 os.environ["USERS_FILE"] = "/tmp/test_users_wireguard.json"
+os.environ["PEER_NAMES_FILE"] = "/tmp/test_peer_names_wireguard.json"
 
 
 def _reset_user_store():
@@ -22,6 +23,16 @@ def _reset_user_store():
     auth_mod._user_store = None
     try:
         os.remove("/tmp/test_users_wireguard.json")
+    except FileNotFoundError:
+        pass
+
+
+def _reset_peer_name_store():
+    """Remove temp peer names file and reset the module-level singleton."""
+    import app.peer_names as pn_mod
+    pn_mod._peer_name_store = None
+    try:
+        os.remove("/tmp/test_peer_names_wireguard.json")
     except FileNotFoundError:
         pass
 
@@ -421,6 +432,95 @@ class TestUserManagement(unittest.TestCase):
             follow_redirects=True,
         )
         self.assertIn(b"cannot delete your own account", resp.data.lower())
+
+
+class TestPeerNames(unittest.TestCase):
+    """Tests for the peer name alias API endpoints."""
+
+    NAMES_FILE = "/tmp/test_peer_names_wireguard.json"
+
+    def setUp(self):
+        _reset_user_store()
+        _reset_peer_name_store()
+        from app import create_app
+        self.app = create_app()
+        self.app.testing = True
+        self.client = self.app.test_client()
+        self._login()
+
+    def tearDown(self):
+        _reset_peer_name_store()
+        _reset_user_store()
+
+    def _login(self):
+        self.client.post(
+            "/login",
+            data={"username": "admin", "password": "testpass"},
+        )
+
+    def test_get_peer_names_empty(self):
+        resp = self.client.get("/api/peer_names")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.get_json(), {})
+
+    def test_set_peer_name(self):
+        pubkey = "PUBKEY1234567890abcdef"
+        resp = self.client.post(
+            f"/api/peer_names/{pubkey}",
+            json={"name": "Alice's Laptop"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["ok"])
+
+    def test_get_peer_names_after_set(self):
+        pubkey = "PUBKEY1234567890abcdef"
+        self.client.post(f"/api/peer_names/{pubkey}", json={"name": "Alice"})
+        resp = self.client.get("/api/peer_names")
+        data = resp.get_json()
+        self.assertEqual(data.get(pubkey), "Alice")
+
+    def test_set_peer_name_empty_rejected(self):
+        resp = self.client.post(
+            "/api/peer_names/SOMEKEY",
+            json={"name": "   "},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.get_json()["ok"])
+
+    def test_set_peer_name_too_long_rejected(self):
+        resp = self.client.post(
+            "/api/peer_names/SOMEKEY",
+            json={"name": "x" * 65},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.get_json()["ok"])
+
+    def test_delete_peer_name(self):
+        pubkey = "PUBKEY1234567890abcdef"
+        self.client.post(f"/api/peer_names/{pubkey}", json={"name": "Bob"})
+        resp = self.client.delete(f"/api/peer_names/{pubkey}")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["ok"])
+        names = self.client.get("/api/peer_names").get_json()
+        self.assertNotIn(pubkey, names)
+
+    def test_delete_nonexistent_peer_name(self):
+        resp = self.client.delete("/api/peer_names/DOESNOTEXIST")
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.get_json()["ok"])
+
+    def test_peer_names_require_login(self):
+        self.client.get("/logout")
+        resp = self.client.get("/api/peer_names", follow_redirects=False)
+        self.assertIn(resp.status_code, (301, 302))
+
+    def test_peer_name_persists_to_file(self):
+        import app.peer_names as pn_mod
+        pubkey = "PERSISTKEY"
+        self.client.post(f"/api/peer_names/{pubkey}", json={"name": "Persisted"})
+        # Load a new store from the same file
+        store2 = pn_mod.PeerNameStore(self.NAMES_FILE)
+        self.assertEqual(store2.get(pubkey), "Persisted")
 
 
 if __name__ == "__main__":
