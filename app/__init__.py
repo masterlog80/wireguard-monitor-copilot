@@ -25,9 +25,11 @@ def create_app() -> Flask:
     # --- Register blueprints ---
     from .routes import main_bp
     from .auth import auth_bp
+    from .users import users_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(users_bp)
 
     # --- Start background poller ---
     from . import wireguard
