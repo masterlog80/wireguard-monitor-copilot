@@ -2,6 +2,33 @@
 
 A Flask-based web application running on Linux (port 5000) that provides a real-time monitoring UI for WireGuard VPN.
 
+## Requirements
+
+- Python 3.10+
+- Linux with WireGuard tools (`wg`) installed (the UI gracefully degrades when `wg` is absent)
+
+## Quick Start
+
+```bash
+# 1. Install Python dependencies
+
+python3 -m venv venv
+source venv/bin/activate
+
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 2. (Optional) set credentials via environment variables
+export ADMIN_USERNAME=admin
+export ADMIN_PASSWORD=changeme   # change this!
+export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+
+# 3. Run the application
+python run.py
+```
+
+Then open **http://\<your-server\>:5000** in a browser and log in.
+
 ## Screenshots
 
 ### Login Page
@@ -29,27 +56,6 @@ A Flask-based web application running on Linux (port 5000) that provides a real-
 - **User authentication** – login/logout with configurable credentials (via environment variables)
 - **User management** – create, delete, and change passwords for multiple user accounts via the web UI
 
-## Requirements
-
-- Python 3.10+
-- Linux with WireGuard tools (`wg`) installed (the UI gracefully degrades when `wg` is absent)
-
-## Quick Start
-
-```bash
-# 1. Install Python dependencies
-pip install -r requirements.txt
-
-# 2. (Optional) set credentials via environment variables
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD=changeme   # change this!
-export SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
-
-# 3. Run the application
-python run.py
-```
-
-Then open **http://\<your-server\>:5000** in a browser and log in.
 
 ## Configuration
 
