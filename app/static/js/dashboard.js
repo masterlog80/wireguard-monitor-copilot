@@ -44,6 +44,25 @@ function timeAgo(epochSeconds) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Peer Names
+// ─────────────────────────────────────────────────────────────────────────────
+
+let peerNames = {};  // public_key -> display name
+
+function peerLabel(publicKey) {
+  return peerNames[publicKey] || shortKey(publicKey);
+}
+
+async function refreshPeerNames() {
+  try {
+    const resp = await fetch('/api/peer_names');
+    peerNames = await resp.json();
+  } catch (e) {
+    console.error('Peer names fetch failed', e);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WireGuard Status
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -107,9 +126,18 @@ async function refreshPeers() {
       const status = p.connected
         ? `${dot}<span class="text-success">Connected</span>`
         : `${dot}<span class="text-danger">Disconnected</span>`;
+      const label = peerNames[p.public_key]
+        ? `<span title="${p.public_key}" class="fw-semibold">${peerNames[p.public_key]}</span>
+           <br><code class="text-muted small">${shortKey(p.public_key)}</code>`
+        : `<code title="${p.public_key}">${shortKey(p.public_key)}</code>`;
       return `<tr>
         <td><code>${p.interface}</code></td>
-        <td><code title="${p.public_key}">${shortKey(p.public_key)}</code></td>
+        <td>
+          ${label}
+          <button class="btn btn-link btn-sm p-0 ms-1 text-muted rename-peer-btn"
+                  data-pubkey="${p.public_key}"
+                  title="Rename peer"><i class="bi bi-pencil"></i></button>
+        </td>
         <td><small>${p.endpoint || '–'}</small></td>
         <td><small>${p.allowed_ips || '–'}</small></td>
         <td><small>${timeAgo(p.latest_handshake)}</small></td>
@@ -182,14 +210,23 @@ function getOrCreateCard(containerId, key, title) {
   return card.querySelector('canvas');
 }
 
+function updateChartCardTitle(containerId, key, title) {
+  const cardEl = document.querySelector(`#${containerId} [data-peer-key="${CSS.escape(key)}"]`);
+  if (cardEl) {
+    const titleEl = cardEl.querySelector('.peer-card-title');
+    if (titleEl) titleEl.textContent = title;
+  }
+}
+
 async function refreshThroughput() {
   try {
     const resp = await fetch('/api/throughput');
     const data = await resp.json();
 
     for (const [key, hist] of Object.entries(data)) {
-      const canvas = getOrCreateCard('throughput-charts-container', key,
-        'Throughput: ' + shortKey(key));
+      const label = 'Throughput: ' + peerLabel(key);
+      const canvas = getOrCreateCard('throughput-charts-container', key, label);
+      updateChartCardTitle('throughput-charts-container', key, label);
 
       if (_throughputCharts[key]) {
         const chart = _throughputCharts[key];
@@ -250,8 +287,9 @@ async function refreshPing() {
     const data = await resp.json();
 
     for (const [key, hist] of Object.entries(data)) {
-      const canvas = getOrCreateCard('ping-charts-container', key,
-        'Ping: ' + shortKey(key));
+      const label = 'Ping: ' + peerLabel(key);
+      const canvas = getOrCreateCard('ping-charts-container', key, label);
+      updateChartCardTitle('ping-charts-container', key, label);
 
       if (_pingCharts[key]) {
         const chart = _pingCharts[key];
@@ -298,6 +336,76 @@ async function refreshPing() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Rename Peer Modal
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _renamePeerKey = null;
+
+function openRenameModal(publicKey) {
+  _renamePeerKey = publicKey;
+  const input = document.getElementById('peer-name-input');
+  const display = document.getElementById('rename-peer-key-display');
+  input.value = peerNames[publicKey] || '';
+  input.classList.remove('is-invalid');
+  display.textContent = publicKey;
+  const modal = new bootstrap.Modal(document.getElementById('renamePeerModal'));
+  modal.show();
+}
+
+async function savePeerName() {
+  if (!_renamePeerKey) return;
+  const input = document.getElementById('peer-name-input');
+  const name = input.value.trim();
+  if (!name) {
+    input.classList.add('is-invalid');
+    return;
+  }
+  input.classList.remove('is-invalid');
+  try {
+    const resp = await fetch(`/api/peer_names/${encodeURIComponent(_renamePeerKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      bootstrap.Modal.getInstance(document.getElementById('renamePeerModal')).hide();
+      await refreshAll();
+    } else {
+      input.classList.add('is-invalid');
+      alert(data.error || 'Failed to save name');
+    }
+  } catch (e) {
+    console.error('Save peer name failed', e);
+  }
+}
+
+async function removePeerName() {
+  if (!_renamePeerKey) return;
+  try {
+    await fetch(`/api/peer_names/${encodeURIComponent(_renamePeerKey)}`, { method: 'DELETE' });
+    bootstrap.Modal.getInstance(document.getElementById('renamePeerModal')).hide();
+    await refreshAll();
+  } catch (e) {
+    console.error('Remove peer name failed', e);
+  }
+}
+
+// Delegate rename button clicks in the peers table
+document.getElementById('peers-tbody').addEventListener('click', function(e) {
+  const btn = e.target.closest('.rename-peer-btn');
+  if (btn) openRenameModal(btn.dataset.pubkey);
+});
+
+document.getElementById('save-peer-name-btn').addEventListener('click', savePeerName);
+document.getElementById('remove-peer-name-btn').addEventListener('click', removePeerName);
+
+// Allow Enter key to save in the name input
+document.getElementById('peer-name-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') savePeerName();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Restart WireGuard
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -341,6 +449,7 @@ async function restartWireguard() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function refreshAll() {
+  await refreshPeerNames();
   await Promise.all([
     refreshStatus(),
     refreshPeers(),

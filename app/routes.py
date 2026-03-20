@@ -1,12 +1,14 @@
 """Main routes blueprint."""
 from __future__ import annotations
 
+import re
 import subprocess
 
-from flask import Blueprint, jsonify, render_template
+from flask import Blueprint, jsonify, render_template, request
 from flask_login import login_required
 
 from . import wireguard, firewall
+from .peer_names import get_peer_name_store
 
 main_bp = Blueprint("main", __name__)
 
@@ -57,14 +59,13 @@ def api_ping():
 @login_required
 def api_restart():
     """Restart the WireGuard service for each active interface."""
-    import re as _re
     interfaces = wireguard.get_interfaces()
     if not interfaces:
         return jsonify({"ok": False, "error": "No WireGuard interfaces found."}), 400
 
     errors = []
     for iface in interfaces:
-        if not _re.fullmatch(r"[a-zA-Z0-9_-]+", iface):
+        if not re.fullmatch(r"[a-zA-Z0-9_-]+", iface):
             errors.append(f"Invalid interface name: {iface!r}")
             continue
         try:
@@ -84,3 +85,37 @@ def api_restart():
     if errors:
         return jsonify({"ok": False, "error": "; ".join(errors)}), 500
     return jsonify({"ok": True, "restarted": interfaces})
+
+
+# ---------------------------------------------------------------------------
+# Peer name aliases
+# ---------------------------------------------------------------------------
+
+
+@main_bp.route("/api/peer_names", methods=["GET"])
+@login_required
+def api_peer_names():
+    """Return all peer name aliases as a mapping of public_key -> name."""
+    return jsonify(get_peer_name_store().get_all())
+
+
+@main_bp.route("/api/peer_names/<path:public_key>", methods=["POST"])
+@login_required
+def api_set_peer_name(public_key):
+    """Set or update the display name for a peer."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    if not name:
+        return jsonify({"ok": False, "error": "Name cannot be empty"}), 400
+    if len(name) > 64:
+        return jsonify({"ok": False, "error": "Name too long (max 64 characters)"}), 400
+    get_peer_name_store().set(public_key, name)
+    return jsonify({"ok": True})
+
+
+@main_bp.route("/api/peer_names/<path:public_key>", methods=["DELETE"])
+@login_required
+def api_delete_peer_name(public_key):
+    """Remove the display name for a peer (reverts to showing the public key)."""
+    get_peer_name_store().delete(public_key)
+    return jsonify({"ok": True})
