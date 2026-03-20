@@ -298,6 +298,45 @@ async function refreshPing() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Restart WireGuard
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function restartWireguard() {
+  const RESTART_REFRESH_DELAY_MS = 2000;
+  const RESTART_RESET_DELAY_MS = 5000;
+
+  const btn = document.getElementById('restart-btn');
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Restarting…';
+
+  try {
+    const resp = await fetch('/api/restart', { method: 'POST' });
+    const data = await resp.json();
+    if (data.ok) {
+      btn.className = 'btn btn-sm btn-success ms-2';
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Restarted';
+      setTimeout(() => refreshAll(), RESTART_REFRESH_DELAY_MS);
+    } else {
+      btn.className = 'btn btn-sm btn-danger ms-2';
+      btn.title = data.error || 'Restart failed';
+      btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Failed';
+    }
+  } catch (e) {
+    console.error('Restart request failed', e);
+    btn.className = 'btn btn-sm btn-danger ms-2';
+    btn.innerHTML = '<i class="bi bi-exclamation-triangle me-1"></i>Error';
+  }
+
+  setTimeout(() => {
+    btn.disabled = false;
+    btn.className = 'btn btn-sm btn-warning ms-2';
+    btn.title = 'Restart WireGuard service';
+    btn.innerHTML = originalHTML;
+  }, RESTART_RESET_DELAY_MS);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bootstrap
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -312,3 +351,5 @@ async function refreshAll() {
 
 refreshAll();
 setInterval(refreshAll, 5000);
+
+document.getElementById('restart-btn').addEventListener('click', restartWireguard);
