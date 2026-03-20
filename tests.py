@@ -123,6 +123,62 @@ class TestAppFactory(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertIsInstance(resp.get_json(), dict)
 
+    def test_api_restart_requires_login(self):
+        resp = self.client.post("/api/restart", follow_redirects=False)
+        self.assertIn(resp.status_code, (301, 302))
+        self.assertIn("/login", resp.headers.get("Location", ""))
+
+    def test_api_restart_no_interfaces(self):
+        """When no WireGuard interfaces are found, restart returns 400."""
+        from app import wireguard
+        self._login()
+        with patch.object(wireguard, "get_interfaces", return_value=[]):
+            resp = self.client.post("/api/restart")
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+
+    def test_api_restart_success(self):
+        """A successful systemctl restart returns ok=True."""
+        from app import wireguard
+        self._login()
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stderr = ""
+        with patch.object(wireguard, "get_interfaces", return_value=["wg0"]), \
+             patch("app.routes.subprocess.run", return_value=mock_result):
+            resp = self.client.post("/api/restart")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["ok"])
+        self.assertIn("wg0", data["restarted"])
+
+    def test_api_restart_failure(self):
+        """A failed systemctl restart returns ok=False with an error."""
+        from app import wireguard
+        self._login()
+        mock_result = MagicMock()
+        mock_result.returncode = 1
+        mock_result.stderr = "Failed to restart"
+        with patch.object(wireguard, "get_interfaces", return_value=["wg0"]), \
+             patch("app.routes.subprocess.run", return_value=mock_result):
+            resp = self.client.post("/api/restart")
+        self.assertEqual(resp.status_code, 500)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+        self.assertIn("wg0", data["error"])
+
+    def test_api_restart_invalid_interface_name(self):
+        """An interface name with invalid characters is rejected."""
+        from app import wireguard
+        self._login()
+        with patch.object(wireguard, "get_interfaces", return_value=["wg0; rm -rf /"]):
+            resp = self.client.post("/api/restart")
+        self.assertEqual(resp.status_code, 500)
+        data = resp.get_json()
+        self.assertFalse(data["ok"])
+        self.assertIn("Invalid interface name", data["error"])
+
     def test_logout(self):
         self._login()
         resp = self.client.get("/logout", follow_redirects=True)
