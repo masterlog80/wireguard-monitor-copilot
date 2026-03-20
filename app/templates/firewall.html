@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Firewall Rules – WireGuard Monitor{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ==================== iptables ==================== -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-fire text-warning"></i>
+        <span class="fw-semibold">iptables Rules</span>
+        {% if rules.iptables.available %}
+          <span class="badge bg-success ms-auto">Available</span>
+        {% else %}
+          <span class="badge bg-danger ms-auto">Unavailable</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if rules.iptables.available %}
+          <ul class="nav nav-tabs mb-3" id="iptablesTab" role="tablist">
+            {% for table_name in rules.iptables.tables %}
+              <li class="nav-item" role="presentation">
+                <button class="nav-link {% if loop.first %}active{% endif %}"
+                        id="tab-{{ table_name }}"
+                        data-bs-toggle="tab"
+                        data-bs-target="#panel-{{ table_name }}"
+                        type="button" role="tab">
+                  {{ table_name }}
+                </button>
+              </li>
+            {% endfor %}
+          </ul>
+          <div class="tab-content">
+            {% for table_name, table_data in rules.iptables.tables.items() %}
+              <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
+                   id="panel-{{ table_name }}" role="tabpanel">
+                {% if table_data.error is defined %}
+                  <div class="alert alert-warning">{{ table_data.error }}</div>
+                {% else %}
+                  {% for chain_name, chain_rules in table_data.chains.items() %}
+                    <h6 class="text-info mt-3 mb-1">
+                      <i class="bi bi-link-45deg me-1"></i>{{ chain_name }}
+                    </h6>
+                    {% if chain_rules %}
+                      <pre class="bg-black rounded p-2 small text-light overflow-auto">{% for rule in chain_rules %}{{ rule }}
+{% endfor %}</pre>
+                    {% else %}
+                      <p class="text-muted small">(empty chain)</p>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-secondary">
+            iptables is not available or insufficient permissions to read rules.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== nftables ==================== -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-shield-fill-exclamation text-warning"></i>
+        <span class="fw-semibold">nftables Rules</span>
+        {% if rules.nftables.available %}
+          <span class="badge bg-success ms-auto">Available</span>
+        {% else %}
+          <span class="badge bg-secondary ms-auto">Not available</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if rules.nftables.available %}
+          <pre class="bg-black rounded p-3 small text-light overflow-auto">{{ rules.nftables.ruleset }}</pre>
+        {% else %}
+          <div class="alert alert-secondary">
+            nftables is not available or insufficient permissions to read rules.
+            {% if rules.nftables.error %}
+              <br/><small>{{ rules.nftables.error }}</small>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
